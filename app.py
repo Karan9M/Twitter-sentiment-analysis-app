@@ -1,18 +1,17 @@
 import streamlit as st
 import pickle
 import re
+import time
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 import nltk
-from ntscraper import Nitter
 
-# Download stopwords once, using Streamlit's caching
+# -------------------- CACHE RESOURCES --------------------
 @st.cache_resource
 def load_stopwords():
     nltk.download('stopwords')
     return stopwords.words('english')
 
-# Load model and vectorizer once
 @st.cache_resource
 def load_model_and_vectorizer():
     with open('model.pkl', 'rb') as model_file:
@@ -21,69 +20,70 @@ def load_model_and_vectorizer():
         vectorizer = pickle.load(vectorizer_file)
     return model, vectorizer
 
-# Define sentiment prediction function
+# -------------------- SENTIMENT FUNCTION --------------------
 def predict_sentiment(text, model, vectorizer, stop_words):
-    # Preprocess text
+    # Preprocess
     text = re.sub('[^a-zA-Z]', ' ', text)
-    text = text.lower()
-    text = text.split()
+    text = text.lower().split()
     text = [word for word in text if word not in stop_words]
     text = ' '.join(text)
     text = [text]
     text = vectorizer.transform(text)
-    
-    # Predict sentiment
+
     sentiment = model.predict(text)
     return "Negative" if sentiment == 0 else "Positive"
 
-# Initialize Nitter scraper
-@st.cache_resource
-def initialize_scraper():
-    return Nitter(log_level=1)
-
-# Function to create a colored card
+# -------------------- CARD UI --------------------
 def create_card(tweet_text, sentiment):
-    color = "green" if sentiment == "Positive" else "red"
+    color = "#2ecc71" if sentiment == "Positive" else "#e74c3c"
+    emoji = "😊" if sentiment == "Positive" else "😞"
     card_html = f"""
-    <div style="background-color: {color}; padding: 10px; border-radius: 5px; margin: 10px 0;">
-        <h5 style="color: white;">{sentiment} Sentiment</h5>
-        <p style="color: white;">{tweet_text}</p>
+    <div style="
+        background-color: {color};
+        padding: 20px;
+        border-radius: 12px;
+        margin-top: 15px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    ">
+        <h4 style="color: white; margin: 0;">{emoji} {sentiment} Sentiment</h4>
+        <p style="color: white; font-size: 16px; margin-top: 8px;">{tweet_text}</p>
     </div>
     """
     return card_html
 
-# Main app logic
+# -------------------- MAIN APP --------------------
 def main():
-    st.title("Twitter Sentiment Analysis")
+    st.set_page_config(page_title="Twitter Sentiment Analysis", page_icon="🔎", layout="centered")
 
-    # Load stopwords, model, vectorizer, and scraper only once
+    st.markdown(
+        "<h1 style='text-align: center; color: #1DA1F2;'>🔎 Sentiment Analyzer</h1>",
+        unsafe_allow_html=True
+    )
+    st.write("Analyze the **sentiment** of any text instantly! 🚀")
+
     stop_words = load_stopwords()
     model, vectorizer = load_model_and_vectorizer()
-    scraper = initialize_scraper()
 
-    # User input: either text input or Twitter username
-    option = st.selectbox("Choose an option", ["Input text", "Get tweets from user"])
-    
-    if option == "Input text":
-        text_input = st.text_area("Enter text to analyze sentiment")
-        if st.button("Analyze"):
-            sentiment = predict_sentiment(text_input, model, vectorizer, stop_words)
-            st.write(f"Sentiment: {sentiment}")
+    # Text input box with highlight
+    text_input = st.text_area("✍️ Enter your text below", placeholder="Type something like: I love using Streamlit!")
 
-    elif option == "Get tweets from user":
-        username = st.text_input("Enter Twitter username")
-        if st.button("Fetch Tweets"):
-            tweets_data = scraper.get_tweets(username, mode='user', number=5)
-            if 'tweets' in tweets_data:  # Check if the 'tweets' key exists
-                for tweet in tweets_data['tweets']:
-                    tweet_text = tweet['text']  # Access the text of the tweet
-                    sentiment = predict_sentiment(tweet_text, model, vectorizer, stop_words)  # Predict sentiment of the tweet text
-                    
-                    # Create and display the colored card for the tweet
-                    card_html = create_card(tweet_text, sentiment)
-                    st.markdown(card_html, unsafe_allow_html=True)
+    if st.button("Analyze Sentiment"):
+        if text_input.strip() == "":
+            st.warning("⚠️ Please enter some text to analyze.")
+        else:
+            with st.spinner("🔍 Analyzing sentiment... Please wait"):
+                time.sleep(1.5)  # fake delay for better UX
+                sentiment = predict_sentiment(text_input, model, vectorizer, stop_words)
+
+            # Display result in styled card
+            card_html = create_card(text_input, sentiment)
+            st.markdown(card_html, unsafe_allow_html=True)
+
+            # Extra feedback message
+            if sentiment == "Positive":
+                st.success("✅ This text has a positive vibe! Keep spreading good energy ✨")
             else:
-                st.write("No tweets found or an error occurred.")
+                st.error("❌ This text seems negative. Stay strong 💪")
 
 if __name__ == "__main__":
     main()
